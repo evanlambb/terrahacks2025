@@ -6,7 +6,6 @@ import os
 import logging
 import json
 import time
-from openai import OpenAI
 from dotenv import load_dotenv
 # Import the LangGraph agent
 import sys
@@ -23,9 +22,6 @@ CORS(app)  # Enable CORS for Unity client
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Load Whisper model (this might take a moment on first run)
 model = whisper.load_model("base")
@@ -114,6 +110,16 @@ def transcribe_audio_file(audio_file):
 def stream_ai_response(transcript):
     """Generator function that yields AI response chunks using LangGraph"""
     try:
+        # First, detect mood and intensity from the transcript
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from agent.chatbot_tools import get_mood_with_intensity
+        
+        mood_data = get_mood_with_intensity(transcript)
+        logger.info(f"Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
+        
+        # Send mood detection result first
+        yield f"data: {json.dumps({'type': 'mood', 'content': mood_data['mood'] + ' ' + str(mood_data['intensity'])})}\n\n"
+
         # Buffer for building complete sentences
         sentence_buffer = ""
 
@@ -188,6 +194,16 @@ def voice_chat():
 
         logger.info(f"Transcription completed: {transcript}")
 
+        # Step 1.5: Detect mood and intensity
+        logger.info("Detecting mood from transcript...")
+        try:
+            from agent.chatbot_tools import get_mood_with_intensity
+            mood_data = get_mood_with_intensity(transcript)
+            logger.info(f"Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
+        except Exception as mood_e:
+            logger.error(f"Mood detection error: {mood_e}")
+            mood_data = {'mood': 'neutral', 'intensity': 50}
+
         # Step 2: Use LangGraph agent directly
         logger.info("Sending transcript to LangGraph agent...")
         try:
@@ -203,10 +219,12 @@ def voice_chat():
             logger.error(f"LangGraph agent error: {agent_e}")
             return jsonify({'error': f'AI response failed: {str(agent_e)}'}), 500
 
-        # Step 3: Return both transcript and AI response
+        # Step 3: Return transcript, AI response, and mood data
         return jsonify({
             'transcript': transcript,
             'ai_response': ai_response,
+            'mood': mood_data['mood'],
+            'mood_intensity': mood_data['intensity'],
             'language': transcription_result.get('language', 'unknown')
         })
 
@@ -295,6 +313,16 @@ def test_memory_persistence():
         logger.info(f"User message: {user_message}")
         logger.info(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         
+        # Step 0.5: Test mood detection
+        logger.info("Step 0.5: Testing mood detection...")
+        try:
+            from agent.chatbot_tools import get_mood_with_intensity
+            mood_data = get_mood_with_intensity(user_message)
+            logger.info(f"Step 0.5: Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
+        except Exception as mood_e:
+            logger.error(f"Step 0.5: Mood detection error: {mood_e}")
+            mood_data = {'mood': 'neutral', 'intensity': 50}
+        
         # Step 1: Test direct LangGraph response
         logger.info("Step 1: Calling LangGraph agent...")
         start_time = time.time()
@@ -379,6 +407,8 @@ def test_memory_persistence():
             'turn_number': turn_number,
             'user_message': user_message,
             'ai_response': ai_response,
+            'mood': mood_data['mood'],
+            'mood_intensity': mood_data['intensity'],
             'response_time': response_time,
             'stream_chunks_count': len(stream_chunks),
             'state_file_status': state_info,
@@ -423,7 +453,7 @@ def test_memory_reset():
 
 
 if __name__ == '__main__':
-    print("Starting Whisper Flask server with ChatGPT integration...")
-    print("Make sure to install required packages: pip install flask flask-cors openai-whisper openai python-dotenv soundfile librosa")
-    print("Also ensure your OPENAI_API_KEY is set in your .env file")
+    print("Starting Whisper Flask server with Gemini integration...")
+    print("Make sure to install required packages: pip install flask flask-cors openai-whisper google-generativeai python-dotenv soundfile librosa")
+    print("Also ensure your GOOGLE_API_KEY is set in your .env file")
     app.run(host='0.0.0.0', port=5000, debug=True)
