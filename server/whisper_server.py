@@ -28,6 +28,8 @@ model = whisper.load_model("base")
 # Global conversation history for single user
 conversation_history = []
 
+stage = 1
+
 
 def add_message(role, content):
     """Add message to conversation history"""
@@ -80,7 +82,7 @@ def detect_mood_and_generate_response(transcript):
 {context}Current user message: "{transcript}"
 
 Based on your character as Aaron and the conversation history (if any), respond naturally as Aaron would. Also analyze the intended mood/emotion from the user's message (choose from: happy, sad, angry), kind messages should have a happy mood, while critical or negative messages should have a sad or angry mood.
-Include what stage in the conversation you are at (1, 2, 3, or 4).
+Include what stage in the conversation you are at (1, 2, 3, or 4). The previous stage was {stage}, if the previous message was suitable for the criteria then move to the next stage and respond according to the next stage. Only move to the next stage if the criteria in the system prompt has been met.
 
 Please respond in this exact JSON format:
 {{
@@ -263,6 +265,7 @@ def voice_chat_stream():
 
         def generate():
             try:
+                global stage
                 # Send transcript first
                 yield f"data: {json.dumps({'type': 'transcript', 'content': transcript})}\n\n"
                 
@@ -282,8 +285,8 @@ def voice_chat_stream():
                 # Send the complete response immediately
                 logger.info("Sending AI response...")
                 yield f"data: {json.dumps({'type': 'text', 'content': gemini_result['response']})}\n\n"
-
-                yield f"data: {json.dumps({'type': 'stage', 'content': str(gemini_result['stage'])})}\n\n"
+                stage = max(gemini_result['stage'], stage)
+                yield f"data: {json.dumps({'type': 'stage', 'content': str(stage)})}\n\n"
 
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
                 

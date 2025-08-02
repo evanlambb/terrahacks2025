@@ -136,34 +136,20 @@ UNLOCK MECHANICS
     else:
         messages_with_system = messages
     
-    # Get the AI response first
+    # Get the AI response
     ai_response = llm_with_tools.invoke(messages_with_system)
     
-    # Then detect the mood and save state (without using tools directly)
+    # Quick mood detection and state saving in the background (non-blocking)
     try:
-        # Use a simple LLM call for mood detection instead of the tool
-        mood_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-        mood_prompt = f"""
-        Analyze this message and return only 'happy', 'sad', or 'neutral':
-        "{user_message}"
+        # Use the optimized mood detection function
+        mood_data = get_mood_with_intensity(user_message)
+        detected_emotion = mood_data['mood']
         
-        Return only the emotion word, nothing else.
-        """
-        mood_response = mood_llm.invoke(mood_prompt)
-        detected_emotion = mood_response.content.strip().lower()
-        
-        # Validate the response
-        if detected_emotion not in ['happy', 'sad', 'neutral']:
-            detected_emotion = 'neutral'
-    except Exception as e:
-        print(f"Error in mood detection: {e}")
-        detected_emotion = 'neutral'
-    
-    # Save the state with emotion, user message, and AI response
-    try:
+        # Save state with detected emotion
         save_state(detected_emotion, user_message, ai_response.content)
     except Exception as e:
-        print(f"Error saving state: {e}")
+        print(f"Background mood/state error: {e}")
+        # Don't let mood detection errors affect the main response
     
     return {"messages": [ai_response]}
 
