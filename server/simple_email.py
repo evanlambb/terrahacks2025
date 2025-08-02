@@ -3,7 +3,7 @@ import os
 import json
 
 import google.generativeai as genai
-from convert_chats import * 
+from convert_chats import *
 
 
 def send_email(to_email, chats):
@@ -12,16 +12,16 @@ def send_email(to_email, chats):
     """
     # Replace with your actual API key from Resend dashboard
     API_KEY = os.getenv("RESEND_API_KEY")
-    
+
     url = "https://api.resend.com/emails"
-    
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
-    
+
     llm_response = generate_analysis(chats)
-    
+
     # Add research section at the bottom
     research_section = """
     
@@ -37,27 +37,29 @@ This analysis is based on the following peer-reviewed research:
 2. **Kids helping kids: The lived experience of adolescents who support friends with mental health needs**  
    [https://doi.org/10.1111/jcap.12299](https://doi.org/10.1111/jcap.12299)
 """
-    
+
     message = f"{llm_response}{research_section}"
     subject = "Peer Support Analysis Report"
 
     # Email data
     data = {
-        "from": "onboarding@resend.dev",  # Free sender address (no setup needed)
+        # Free sender address (no setup needed)
+        "from": "onboarding@resend.dev",
         "to": [to_email],
         "subject": subject,
         "html": f"<pre style='white-space: pre-wrap; font-family: Arial, sans-serif;'>{message}</pre>"
     }
-    
+
     # Send the email
     response = requests.post(url, json=data, headers=headers)
-    
+
     if response.status_code == 200:
         print(f"✅ Email sent successfully to {to_email}")
         return True
     else:
         print(f"❌ Failed to send email: {response.text}")
         return False
+
 
 # Example usage
 if __name__ == "__main__":
@@ -68,14 +70,17 @@ if __name__ == "__main__":
         "I noticed you seem a bit tired in class. Everything alright?",
         "Yeah, just haven't been sleeping well lately. Been staying up working on projects."
     ]
-    
+
     send_email(
-        to_email="evanlamb848@gmail.com",  # Must be your Resend account email in testing mode
+        # Must be your Resend account email in testing mode
+        to_email="evanlamb848@gmail.com",
         chats=sample_chats
     )
 
-# takes a list of strings that are the chat history and returns a string that is the analysis. 
+# takes a list of strings that are the chat history and returns a string that is the analysis.
 # Even indexes are the user's messages and odd indexes are the AI's messages.
+
+
 def generate_analysis(chats):
     api_key = os.getenv("GOOGLE_API_KEY")
     genai.configure(api_key=api_key)
@@ -84,89 +89,50 @@ def generate_analysis(chats):
     chats_json = convert_chats_to_json(chats, "chats.json")
 
     response = model.generate_content(f"""
-   You are an expert peer-support evaluator. Given a conversation transcript between the user and a peer exhibiting early signs of depression, you will:
+SYSTEM:
+You are “PeerSupportEvaluator,” an expert in assessing peer-to-peer conversations where a friend comforts a depressed university student. Your job is to read a transcript of the User’s supportive responses and produce a clear, human-friendly evaluation.
 
-1. Score the User’s supportive dialogue from 0–100, weighting each research-backed criterion equally. For each, consider the study’s population, methodology, and key findings:
+When given a conversation, follow these steps:
 
-1. Early Sign Recognition (Irritability)
+1. Identify each time the User offers comfort or support.
 
-Source: Wahid et al. (2022), Child and Adolescent Psychiatry and Mental Health
+2. Rate the User’s responses in three areas (each from 1 to 5 stars):
+   • Empathetic Language (40%):  
+     – ★☆☆☆☆ No warmth or reflection  
+     – ★★★☆☆ Basic mirroring and validation  
+     – ★★★★★ Deep emotional insight, gentle patience  
+   • Supportive Phrases (30%):  
+     – ★☆☆☆☆ No known supportive phrases  
+     – ★★★☆☆ Occasional “I care about you,” “Your feelings matter”  
+     – ★★★★★ Natural, heartfelt use of “You matter to me,” “How can I help?”  
+   • Avoidance of Harm (30%):  
+     – ★☆☆☆☆ Includes invalidating remarks or unsolicited advice  
+     – ★★★☆☆ Mostly respectful, with a minor slip  
+     – ★★★★★ Always respectful, never judgmental or directive  
 
-Population & Method: Qualitative interviews with 30 Nepali adolescents diagnosed with depression.
+3. Calculate an overall star rating out of 5, using the weighted formula:
+   > overall = Empathy×0.40 + Supportive×0.30 + Avoidance×0.30  
 
-Key Finding: Teens more often reported irritability, restlessness, and social withdrawal than overt sadness when depressed. Early peers noticing small mood swings can prompt timely support.
+4. For each category, give 1–2 brief quotes from the transcript and explain why they earned their stars.
 
-2. Sleep Concern Inquiry
+5. Offer one or two practical tips for improving in each area.
 
-Source: Mental Health First Aid USA (2018) guidelines
+6. Present your evaluation in plain text like this:
 
-Basis: Expert consensus and review of adolescent depression literature.
+Empathy: ★★★★☆  
+• Quote: “It sounds like you’ve been feeling overwhelmed…” — reflects and validates emotion.  
+• Tip: Try longer pauses to let your friend collect their thoughts.
 
-Key Finding: Sleep disturbances (insomnia or hypersomnia) are core diagnostic criteria in adolescents and strongly correlate with worsening mood and concentration. Asking about sleep shows attunement to clinical red flags.
+Supportive Phrases: ★★★☆☆  
+• Quote: “Your feelings are valid.” — good validation, but could add “I’m here for you.”  
+• Tip: Use “You matter to me” more often to reinforce worth.
 
-3. Academic Function Check
+Avoidance of Harm: ★★★★★  
+• Quote: “Would you like some space?” — shows respect for autonomy.  
 
-Source: Roach et al. (2021), Journal of Child and Adolescent Psychiatric Nursing
+Overall: ★★★★☆  
+General feedback: You show strong empathy, just add more strategic encouragement.
 
-Population & Method: Mixed-methods study of 50 teens supporting friends with mental health needs.
-
-Key Finding: Friends commonly observed missed assignments, declining grades, and study avoidance as early depression indicators. Discussing school performance invites reflection on functional impact.
-
-4. Open-Ended, Empathetic Questions
-
-Source: Villines (2023), Medical News Today (summarizing Samaritans Active Listening)
-
-Basis: Guidelines distilled from crisis-support training programs.
-
-Key Finding: Questions that cannot be answered “yes” or “no” (e.g., “What’s been hardest about your sleep lately?”) foster more detailed disclosures, giving the speaker control over depth and pacing.
-
-5. Validation & Reflective Listening
-
-Source: Samaritans Active Listening Guide (2023)
-
-Basis: Decades of crisis-helpline data and qualitative feedback.
-
-Key Finding: Reflecting back feelings (“It sounds like you’re overwhelmed”) and explicit validation (“Your feelings are valid”) reduce shame and isolation, making teens feel truly heard.
-
-6. Avoidance of Minimizing or Fix-It Language
-
-Source: Mental Health First Aid USA (2018)
-
-Basis: Compilation of peer-support missteps observed in adolescent populations.
-
-Key Finding: Comments like “Just cheer up” or “Others have it worse” shut down conversations and reinforce stigma. Teens need compassion, not quick fixes or comparisons.
-
-7. Offer of Presence & Supportive Actions
-
-Source: Mayo Clinic Staff (2023), Depression: Supporting a family member or friend
-
-Basis: Clinical best practices for non-professional support.
-
-Key Finding: Practical help—studying together, bringing meals, or sitting quietly—builds belonging and counters inertia. Even small gestures signal “You’re not alone.”
-
-2. List Strengths
-
-For each positive point, provide the transcript line number and reference the specific study (e.g., “(Validation – Samaritans 2023: reduced isolation)”).
-
-3. List Improvements
-
-For each suggestion, cite the transcript line number and tie it back to the research context (e.g., “(Sleep Inquiry – MHFA USA 2018: core symptom missed)”).
-
-Output Format: 
-- Score out of 100
-- Analysis of the things that they didd well or poorly
-
-Do not include any other text in your response.
-
-
-
-Example Transcript Snippet:
-
-…
-User: "Hey Aaron, I’ve noticed you seem more irritable at dinner…"  
-System: "Yeah, I’m exhausted and barely sleeping."  
-User: "What time have you been going to bed lately, and how restful has it been?"  
-…
 Begin your research-anchored evaluation now. Find the chats below.
 
 {chats_json}
@@ -174,9 +140,3 @@ Begin your research-anchored evaluation now. Find the chats below.
 
     print(response.text)
     return response.text
-
-
-
-
-
-
