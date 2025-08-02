@@ -11,7 +11,7 @@ def send_email(to_email, chats):
     Send email using Resend API - simplest possible implementation
     """
     # Replace with your actual API key from Resend dashboard
-    API_KEY = "re_Xu9Xyoig_5VLKuRJNSh51gZA16dtFKLB2"  # Get this from resend.com
+    API_KEY = os.getenv("RESEND_API_KEY")
     
     url = "https://api.resend.com/emails"
     

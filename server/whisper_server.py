@@ -1,10 +1,10 @@
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import whisper
-import tempfile
 import os
 import logging
 import json
+<<<<<<< HEAD
 from datetime import datetime
 import time
 from dotenv import load_dotenv
@@ -13,19 +13,121 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simple_email import send_email
+=======
+import tempfile
+from dotenv import load_dotenv
+import google.generativeai as genai
+>>>>>>> 8a6606e6459ff34ae885f9d3f0a1136160366983
 
 # Load environment variables
 load_dotenv()
 
+# Configure Gemini
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for Unity client
+CORS(app)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load Whisper model (this might take a moment on first run)
+# Load Whisper model
 model = whisper.load_model("base")
+
+# Global conversation history for single user
+conversation_history = []
+
+stage = 1
+
+
+def add_message(role, content):
+    """Add message to conversation history"""
+    conversation_history.append({
+        "role": role, 
+        "content": content
+    })
+    
+    # Keep only last 10 messages to prevent memory bloat
+    if len(conversation_history) > 10:
+        conversation_history.pop(0)  # Remove oldest message
+
+
+def get_conversation_context():
+    """Get conversation context for Gemini prompt"""
+    if not conversation_history:
+        return ""
+    
+    context = "Previous conversation:\n"
+    for msg in conversation_history[-6:]:  # Last 6 messages for context
+        role_name = "User" if msg["role"] == "user" else "Assistant"
+        context += f"{role_name}: {msg['content']}\n"
+    
+    return context + "\n"
+
+
+def load_system_prompt():
+    """Load the system prompt from prompt.txt"""
+    try:
+        prompt_path = os.path.join(os.path.dirname(__file__), 'prompt.txt')
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"Failed to load system prompt: {e}")
+        return "You are a helpful assistant."
+
+
+def detect_mood_and_generate_response(transcript):
+    """Detect mood from transcript and generate appropriate response with conversation context"""
+    try:
+        # Load system prompt
+        system_prompt = load_system_prompt()
+        
+        # Get conversation context
+        context = get_conversation_context()
+        
+        # Create the full prompt with system prompt, context, and current message
+        full_prompt = f"""{system_prompt}
+
+{context}Current user message: "{transcript}"
+
+Based on your character as Aaron and the conversation history (if any), respond naturally as Aaron would. Also analyze the intended mood/emotion from the user's message (choose from: happy, sad, angry), kind messages should have a happy mood, while critical or negative messages should have a sad or angry mood.
+Include what stage in the conversation you are at (1, 2, 3, or 4). The previous stage was {stage}, if the previous message was suitable for the criteria then move to the next stage and respond according to the next stage. Only move to the next stage if the criteria in the system prompt has been met.
+Also include whether the conversations is over or not, ie both parties have said goodbye and stage 4 has been reached.
+
+Please respond in this exact JSON format:
+{{
+    "mood": "detected_mood",
+    "intensity": intensity_score_0_to_100,
+    "response": "Aaron's natural response as defined in the system prompt",
+    "stage": current_stage_number,
+    "conversation_over": true or false
+}}
+"""
+        
+        logger.info("Calling Gemini for mood detection and response generation...")
+        response = gemini_model.generate_content(full_prompt)
+        
+        # Parse the JSON response
+        response_text = response.text.strip()
+        if response_text.startswith('```json'):
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        
+        result = json.loads(response_text)
+        logger.info(f"Gemini response: mood={result.get('mood')}, intensity={result.get('intensity')}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Mood detection/response generation failed: {e}")
+        # Return fallback response
+        return {
+            "mood": "neutral",
+            "intensity": 50,
+            "response": "Hey, I'm having some trouble processing that right now. Mind saying it again?",
+            "stage": 1
+        }
 
 
 def transcribe_audio_file(audio_file):
@@ -108,75 +210,9 @@ def transcribe_audio_file(audio_file):
                     f"Failed to clean up temporary file {tmp_path}: {cleanup_e}")
 
 
-def stream_ai_response(transcript):
-    """Generator function that yields AI response chunks using LangGraph"""
-    try:
-        # First, detect mood and intensity from the transcript
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from agent.chatbot_tools import get_mood_with_intensity
-        
-        mood_data = get_mood_with_intensity(transcript)
-        logger.info(f"Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
-        
-        # Send mood detection result first
-        yield f"data: {json.dumps({'type': 'mood', 'content': mood_data['mood'] + ' ' + str(mood_data['intensity'])})}\n\n"
-
-        # Buffer for building complete sentences
-        sentence_buffer = ""
-
-        from agent.chatbot import graph, config, HumanMessage
-        for event in graph.stream(
-            {"messages": [HumanMessage(content=transcript)]}, 
-            config=config):
-            
-            for value in event.values():
-                if "messages" in value and value["messages"]:
-                    chunk = value["messages"][-1].content
-                    if chunk:
-                        sentence_buffer += chunk
-
-                        # Check if we have a complete sentence
-                        if any(punct in chunk for punct in ['.', '!', '?', '\n']):
-                            if sentence_buffer.strip():
-                                yield f"data: {json.dumps({'type': 'text', 'content': sentence_buffer.strip()})}\n\n"
-                                sentence_buffer = ""
-
-        # Send any remaining content
-        if sentence_buffer.strip():
-            yield f"data: {json.dumps({'type': 'text', 'content': sentence_buffer.strip()})}\n\n"
-
-        # Send completion signal
-        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
-
-    except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
-
-# @app.route('/transcribe', methods=['POST'])
-# def transcribe():
-#     try:
-#         if 'file' not in request.files:
-#             return jsonify({'error': 'No audio file provided'}), 400
-
-#         audio = request.files['file']
-#         if audio.filename == '':
-#             return jsonify({'error': 'No file selected'}), 400
-
-#         # Use the helper function to transcribe
-#         result = transcribe_audio_file(audio)
-
-#         return jsonify({
-#             'text': result['text'],
-#             'language': result.get('language', 'unknown'),
-#             'segments': result.get('segments', [])
-#         })
-
-#     except Exception as e:
-#         logger.error(f"Error during transcription: {str(e)}")
-#         return jsonify({'error': f'Transcription failed: {str(e)}'}), 500
-
-
 @app.route('/voice-chat', methods=['POST'])
 def voice_chat():
+    """Main voice chat endpoint - transcribe, detect mood, and respond"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No audio file provided'}), 400
@@ -185,53 +221,34 @@ def voice_chat():
         if audio.filename == '':
             return jsonify({'error': 'No file selected'}), 400
 
-        # Step 1: Transcribe the audio using Whisper
-        logger.info("Starting voice chat - transcribing audio...")
+        # Step 1: Transcribe audio
+        logger.info("Transcribing audio...")
         transcription_result = transcribe_audio_file(audio)
         transcript = transcription_result['text'].strip()
 
         if not transcript:
-            return jsonify({'error': 'No speech detected in audio'}), 400
+            return jsonify({'error': 'No speech detected'}), 400
 
-        logger.info(f"Transcription completed: {transcript}")
+        # Step 2: Add user message to conversation history
+        add_message("user", transcript)
 
-        # Step 1.5: Detect mood and intensity
-        logger.info("Detecting mood from transcript...")
-        try:
-            from agent.chatbot_tools import get_mood_with_intensity
-            mood_data = get_mood_with_intensity(transcript)
-            logger.info(f"Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
-        except Exception as mood_e:
-            logger.error(f"Mood detection error: {mood_e}")
-            mood_data = {'mood': 'neutral', 'intensity': 50}
+        # Step 3: Detect mood and generate response using Gemini with context
+        logger.info("Detecting mood and generating response with conversation context...")
+        gemini_result = detect_mood_and_generate_response(transcript)
 
-        # Step 2: Use LangGraph agent directly
-        logger.info("Sending transcript to LangGraph agent...")
-        try:
-            from agent.chatbot import graph, config, HumanMessage
-            result = graph.invoke(
-                {"messages": [HumanMessage(content=transcript)]}, 
-                config=config
-            )
-            ai_response = result["messages"][-1].content
-            logger.info(f"LangGraph agent response: {ai_response}")
+        # Step 4: Add AI response to conversation history
+        add_message("assistant", gemini_result['response'])
 
-        except Exception as agent_e:
-            logger.error(f"LangGraph agent error: {agent_e}")
-            return jsonify({'error': f'AI response failed: {str(agent_e)}'}), 500
-
-        # Step 3: Return transcript, AI response, and mood data
         return jsonify({
             'transcript': transcript,
-            'ai_response': ai_response,
-            'mood': mood_data['mood'],
-            'mood_intensity': mood_data['intensity'],
-            'language': transcription_result.get('language', 'unknown')
+            'ai_response': gemini_result['response'],
+            'mood': gemini_result['mood'],
+            'mood_intensity': gemini_result['intensity']
         })
 
     except Exception as e:
-        logger.error(f"Error during voice chat: {str(e)}")
-        return jsonify({'error': f'Voice chat failed: {str(e)}'}), 500
+        logger.error(f"Voice chat error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/get-score-and-email', methods=['POST'])
 def get_score_and_email():
@@ -255,6 +272,7 @@ def get_score_and_email():
 
 @app.route('/voice-chat-stream', methods=['POST'])
 def voice_chat_stream():
+    """Streaming voice chat endpoint - transcribe, detect mood, and stream response"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No audio file provided'}), 400
@@ -263,35 +281,60 @@ def voice_chat_stream():
         if audio.filename == '':
             return jsonify({'error': 'No file selected'}), 400
 
-        # Step 1: Transcribe the audio
+        # Transcribe audio
         logger.info("Starting streaming voice chat - transcribing audio...")
-        transcription_result = transcribe_audio_file(audio)
-        transcript = transcription_result['text'].strip()
+        try:
+            transcription_result = transcribe_audio_file(audio)
+            transcript = transcription_result['text'].strip()
+        except Exception as transcription_error:
+            logger.error(f"Transcription failed: {transcription_error}")
+            return jsonify({'error': f'Transcription failed: {str(transcription_error)}'}), 500
 
         if not transcript:
-            return jsonify({'error': 'No speech detected in audio'}), 400
+            return jsonify({'error': 'No speech detected'}), 400
 
-        logger.info(f"Transcription completed: {transcript}")
+        logger.info(f"Transcription successful: {transcript}")
 
-        # Step 2: Create streaming response using LangGraph
         def generate():
-            # First, send the transcript
-            yield f"data: {json.dumps({'type': 'transcript', 'content': transcript})}\n\n"
+            try:
+                global stage
+                # Send transcript first
+                yield f"data: {json.dumps({'type': 'transcript', 'content': transcript})}\n\n"
+                
+                # Add user message to conversation history
+                add_message("user", transcript)
+                
+                # Get mood and response from Gemini with conversation context
+                logger.info("Getting mood detection and response from Gemini with context...")
+                gemini_result = detect_mood_and_generate_response(transcript)
+                
+                # Add AI response to conversation history
+                add_message("assistant", gemini_result['response'])
+                
+                # Send mood data
+                yield f"data: {json.dumps({'type': 'mood', 'content': gemini_result['mood'] + ' ' + str(gemini_result['intensity'])})}\n\n"
+                
+                # Send the complete response immediately
+                logger.info("Sending AI response...")
+                yield f"data: {json.dumps({'type': 'text', 'content': gemini_result['response']})}\n\n"
+                stage = max(gemini_result['stage'], stage)
+                yield f"data: {json.dumps({'type': 'stage', 'content': str(stage)})}\n\n"
+                yield f"data: {json.dumps({'type': 'conversation_over', 'content': str(gemini_result['conversation_over'])})}\n\n"
+                yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+                
+            except Exception as stream_error:
+                logger.error(f"Stream generation error: {stream_error}")
+                yield f"data: {json.dumps({'type': 'error', 'content': str(stream_error)})}\n\n"
 
-            # Then stream the AI response
-            for chunk in stream_ai_response(transcript):
-                yield chunk
-
-        return Response(generate(), mimetype='text/plain', headers={
+        return Response(generate(), mimetype='text/event-stream', headers={
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
-            'Content-Type': 'text/event-stream',
             'Access-Control-Allow-Origin': '*'
         })
 
     except Exception as e:
-        logger.error(f"Error during streaming voice chat: {str(e)}")
-        return jsonify({'error': f'Streaming voice chat failed: {str(e)}'}), 500
+        logger.error(f"Streaming endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/health', methods=['GET'])
@@ -299,181 +342,26 @@ def health():
     return jsonify({'status': 'healthy', 'model_loaded': model is not None})
 
 
-@app.route('/session/<session_id>/history', methods=['GET'])
-def get_session_history(session_id):
-    """Get conversation history for a session"""
-    try:
-        # This would require implementing a way to retrieve conversation history
-        # from the LangGraph memory system
-        logger.info(f"Requested history for session: {session_id}")
-        return jsonify({
-            'session_id': session_id,
-            'message': 'History retrieval not yet implemented',
-            'note': 'This would require additional implementation to access LangGraph memory'
-        })
-    except Exception as e:
-        logger.error(f"Error getting session history: {str(e)}")
-        return jsonify({'error': f'History retrieval failed: {str(e)}'}), 500
+@app.route('/conversation', methods=['GET'])
+def get_conversation():
+    """Get current conversation history"""
+    return jsonify({
+        'conversation_history': conversation_history,
+        'message_count': len(conversation_history)
+    })
 
 
-@app.route('/test-memory', methods=['POST'])
-def test_memory_persistence():
-    """Test endpoint to verify memory persistence across multiple requests"""
-    try:
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({'error': 'No message provided'}), 400
-        
-        user_message = data['message']
-        test_id = data.get('test_id', 'unknown')
-        turn_number = data.get('turn_number', 0)
-        
-        logger.info(f"=== MEMORY TEST TURN {turn_number} ===")
-        logger.info(f"Test ID: {test_id}")
-        logger.info(f"User message: {user_message}")
-        logger.info(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Step 0.5: Test mood detection
-        logger.info("Step 0.5: Testing mood detection...")
-        try:
-            from agent.chatbot_tools import get_mood_with_intensity
-            mood_data = get_mood_with_intensity(user_message)
-            logger.info(f"Step 0.5: Detected mood: {mood_data['mood']} with intensity: {mood_data['intensity']}")
-        except Exception as mood_e:
-            logger.error(f"Step 0.5: Mood detection error: {mood_e}")
-            mood_data = {'mood': 'neutral', 'intensity': 50}
-        
-        # Step 1: Test direct LangGraph response
-        logger.info("Step 1: Calling LangGraph agent...")
-        start_time = time.time()
-        
-        try:
-            from agent.chatbot import graph, config, HumanMessage
-            result = graph.invoke(
-                {"messages": [HumanMessage(content=user_message)]}, 
-                config=config
-            )
-            ai_response = result["messages"][-1].content
-            response_time = time.time() - start_time
-            
-            logger.info(f"Step 1: LangGraph response received in {response_time:.2f}s")
-            logger.info(f"Step 1: AI Response: {ai_response}")
-            
-        except Exception as agent_e:
-            logger.error(f"Step 1: LangGraph agent error: {agent_e}")
-            return jsonify({'error': f'AI response failed: {str(agent_e)}'}), 500
-        
-        # Step 2: Test streaming response (simulate a few chunks)
-        logger.info("Step 2: Testing streaming response...")
-        stream_chunks = []
-        try:
-            from agent.chatbot import graph, config, HumanMessage
-            for event in graph.stream(
-                {"messages": [HumanMessage(content=user_message)]}, 
-                config=config):
-                
-                for value in event.values():
-                    if "messages" in value and value["messages"]:
-                        chunk = value["messages"][-1].content
-                        if chunk:
-                            stream_chunks.append(chunk)
-                            logger.info(f"Step 2: Stream chunk {len(stream_chunks)}: {chunk[:100]}...")
-                            if len(stream_chunks) >= 3:  # Just test first few chunks
-                                break
-                        if len(stream_chunks) >= 3:
-                            break
-                if len(stream_chunks) >= 3:
-                    break
-        except Exception as stream_e:
-            logger.error(f"Step 2: Streaming error: {stream_e}")
-        
-        # Step 3: Check if state file was created/updated
-        logger.info("Step 3: Checking state file...")
-        state_file = "server/state.json"
-        state_info = "No state file found"
-        try:
-            if os.path.exists(state_file):
-                with open(state_file, 'r') as f:
-                    state_data = json.load(f)
-                    state_info = f"State file exists with emotion: {state_data.get('current_emotion', 'unknown')}"
-                    logger.info(f"Step 3: {state_info}")
-            else:
-                logger.info("Step 3: No state file found yet")
-        except Exception as state_e:
-            logger.error(f"Step 3: Error reading state file: {state_e}")
-        
-        # Step 4: Memory verification summary
-        logger.info("Step 4: Memory verification summary...")
-        logger.info(f"  - Turn number: {turn_number}")
-        logger.info(f"  - Test ID: {test_id}")
-        logger.info(f"  - Response time: {response_time:.2f}s")
-        logger.info(f"  - Stream chunks received: {len(stream_chunks)}")
-        logger.info(f"  - State file status: {state_info}")
-        
-        # Step 5: Provide context for next turn
-        context_hint = ""
-        if turn_number == 0:
-            context_hint = "First turn - no previous context"
-        elif turn_number == 1:
-            context_hint = "Second turn - should remember first turn"
-        else:
-            context_hint = f"Turn {turn_number} - should remember all previous turns"
-        
-        logger.info(f"Step 5: Context hint: {context_hint}")
-        logger.info("=== END MEMORY TEST TURN ===\n")
-        
-        return jsonify({
-            'test_id': test_id,
-            'turn_number': turn_number,
-            'user_message': user_message,
-            'ai_response': ai_response,
-            'mood': mood_data['mood'],
-            'mood_intensity': mood_data['intensity'],
-            'response_time': response_time,
-            'stream_chunks_count': len(stream_chunks),
-            'state_file_status': state_info,
-            'context_hint': context_hint,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
-        })
-        
-    except Exception as e:
-        logger.error(f"Error during memory test: {str(e)}")
-        return jsonify({'error': f'Memory test failed: {str(e)}'}), 500
-
-
-@app.route('/test-memory-reset', methods=['POST'])
-def test_memory_reset():
-    """Test endpoint to verify memory can be reset by restarting the server"""
-    try:
-        logger.info("=== MEMORY RESET TEST ===")
-        logger.info("This endpoint simulates what happens when the server restarts")
-        logger.info("In a real scenario, you would restart the Flask server")
-        logger.info("For testing, we'll just log the current state")
-        
-        # Check current state
-        state_file = "server/state.json"
-        if os.path.exists(state_file):
-            with open(state_file, 'r') as f:
-                state_data = json.load(f)
-                logger.info(f"Current state before 'reset': {state_data}")
-        else:
-            logger.info("No state file found")
-        
-        logger.info("=== END MEMORY RESET TEST ===\n")
-        
-        return jsonify({
-            'message': 'Memory reset test completed',
-            'note': 'To actually reset memory, restart the Flask server',
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
-        })
-        
-    except Exception as e:
-        logger.error(f"Error during memory reset test: {str(e)}")
-        return jsonify({'error': f'Memory reset test failed: {str(e)}'}), 500
+@app.route('/conversation', methods=['DELETE'])
+def clear_conversation():
+    """Clear conversation history"""
+    global conversation_history
+    conversation_history = []
+    logger.info("Conversation history cleared")
+    return jsonify({'message': 'Conversation history cleared'})
 
 
 if __name__ == '__main__':
-    print("Starting Whisper Flask server with Gemini integration...")
-    print("Make sure to install required packages: pip install flask flask-cors openai-whisper google-generativeai python-dotenv soundfile librosa")
-    print("Also ensure your GOOGLE_API_KEY is set in your .env file")
+    print("Starting simplified Whisper + Gemini Flask server...")
+    print("Endpoints: /voice-chat (standard), /voice-chat-stream (streaming)")
+    print("Flow: Audio → Whisper Transcription → Gemini Mood Detection & Response")
     app.run(host='0.0.0.0', port=5000, debug=True)

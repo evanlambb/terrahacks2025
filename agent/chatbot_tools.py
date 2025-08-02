@@ -23,28 +23,6 @@ def get_weather(city: str) -> str:
 
 
 @tool 
-def get_mood(user_message: str) -> str:
-    """Analyze user message and return 'happy', 'sad', or 'neutral' emotion"""
-    try:
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-        response = llm.invoke(f"""
-        Analyze this message and return only 'happy', 'sad', or 'neutral':
-        "{user_message}"
-        
-        Return only the emotion word, nothing else.
-        """)
-        emotion = response.content.strip().lower()
-        
-        # Validate the response
-        if emotion in ['happy', 'sad', 'neutral']:
-            return emotion
-        else:
-            return 'neutral'
-    except Exception as e:
-        print(f"Error in mood detection: {e}")
-        return 'neutral'
-
-
 def get_mood_with_intensity(user_message: str) -> dict:
     """Analyze user message and return mood ('happy', 'sad', 'angry') with intensity (1-100)"""
     try:
