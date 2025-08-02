@@ -6,7 +6,6 @@ import os
 import logging
 import json
 import time
-from openai import OpenAI
 from dotenv import load_dotenv
 # Import the LangGraph agent
 import sys
@@ -23,9 +22,6 @@ CORS(app)  # Enable CORS for Unity client
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Load Whisper model (this might take a moment on first run)
 model = whisper.load_model("base")
@@ -423,7 +419,7 @@ def test_memory_reset():
 
 
 if __name__ == '__main__':
-    print("Starting Whisper Flask server with ChatGPT integration...")
-    print("Make sure to install required packages: pip install flask flask-cors openai-whisper openai python-dotenv soundfile librosa")
-    print("Also ensure your OPENAI_API_KEY is set in your .env file")
+    print("Starting Whisper Flask server with Gemini integration...")
+    print("Make sure to install required packages: pip install flask flask-cors openai-whisper google-generativeai python-dotenv soundfile librosa")
+    print("Also ensure your GOOGLE_API_KEY is set in your .env file")
     app.run(host='0.0.0.0', port=5000, debug=True)

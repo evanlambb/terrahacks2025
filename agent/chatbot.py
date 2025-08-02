@@ -2,7 +2,7 @@ from typing import Annotated
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from typing_extensions import TypedDict
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -27,7 +27,7 @@ graph_builder = StateGraph(State)
 
 # Simplified tools list to avoid compatibility issues
 tools = [get_weather]
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
 llm_with_tools = llm.bind_tools(tools)
 
 def chatbot(state: State):
@@ -142,7 +142,7 @@ UNLOCK MECHANICS
     # Then detect the mood and save state (without using tools directly)
     try:
         # Use a simple LLM call for mood detection instead of the tool
-        mood_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        mood_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
         mood_prompt = f"""
         Analyze this message and return only 'happy', 'sad', or 'neutral':
         "{user_message}"

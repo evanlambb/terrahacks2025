@@ -2,7 +2,7 @@ import json
 import os
 import datetime
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 @tool
 def get_weather(city: str) -> str:
@@ -26,7 +26,7 @@ def get_weather(city: str) -> str:
 def get_mood(user_message: str) -> str:
     """Analyze user message and return 'happy', 'sad', or 'neutral' emotion"""
     try:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
         response = llm.invoke(f"""
         Analyze this message and return only 'happy', 'sad', or 'neutral':
         "{user_message}"

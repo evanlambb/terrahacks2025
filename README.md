@@ -1,12 +1,12 @@
 # TerraHacks 2025 - AI Voice Chat with Memory
 
-A Flask-based voice chat application with AI memory persistence using LangGraph and Whisper.
+A Flask-based voice chat application with AI memory persistence using LangGraph, Whisper, and Google Gemini.
 
 ## Features
 
 - 🎤 **Voice Chat**: Real-time audio transcription using OpenAI Whisper
 - 🧠 **Memory Persistence**: Conversation context maintained across sessions using LangGraph
-- 📡 **Streaming Responses**: Real-time AI response streaming
+- 📡 **Streaming Responses**: Real-time AI response streaming with Google Gemini
 - 🎭 **Character AI**: Role-playing as Aaron, a CS student persona
 - 🔧 **RESTful API**: Easy integration with Unity or other clients
 
@@ -23,8 +23,10 @@ pip install -r requirements.txt
 Create a `.env` file in the root directory:
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
 ```
+
+Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey).
 
 ### 3. Start the Server
 
@@ -120,7 +122,7 @@ The AI plays the role of Aaron, a 20-year-old CS student with specific personali
 ### Common Issues
 1. **"No speech detected in audio"** - Use real speech recordings, not dummy audio
 2. **Memory not persisting** - Check that the server is running and LangGraph is properly configured
-3. **API key errors** - Ensure your `.env` file contains a valid OpenAI API key
+3. **API key errors** - Ensure your `.env` file contains a valid Google API key
 
 ### Testing
 - Use `python test_memory.py --simple` for quick memory verification
