@@ -45,6 +45,79 @@ def get_mood(user_message: str) -> str:
         return 'neutral'
 
 
+def get_mood_with_intensity(user_message: str) -> dict:
+    """Analyze user message and return mood ('happy', 'sad', 'angry') with intensity (1-100)"""
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+        response = llm.invoke(f"""
+        Analyze this message for emotional content and return a JSON object with two fields:
+        1. "mood": one of "happy", "sad", "angry", or "neutral"
+        2. "intensity": a number from 1 to 100 representing the intensity of the emotion
+        
+        Consider the following:
+        - "happy" for positive, uplifting, encouraging, joyful, or empowering messages
+        - "sad" for negative, discouraging, melancholic, or depressing messages  
+        - "angry" for frustrated, irritated, aggressive, or hostile messages
+        - "neutral" for factual, calm, or emotionally balanced messages
+        
+        For intensity:
+        - 1-20: Very mild emotion
+        - 21-40: Mild emotion
+        - 41-60: Moderate emotion
+        - 61-80: Strong emotion
+        - 81-100: Very strong/intense emotion
+        
+        Message to analyze: "{user_message}"
+        
+        Return only a valid JSON object like: {{"mood": "happy", "intensity": 75}}
+
+        Don't specify that the response is JSON, just return the object directly.
+        """)
+        
+        # Parse the JSON response
+        import json as json_lib
+        try:
+            content = response.content.strip()
+            print(f"Raw mood response: {content}")
+            
+            # Remove markdown code block formatting if present
+            if content.startswith('```json'):
+                content = content[7:]  # Remove ```json
+            elif content.startswith('```'):
+                content = content[3:]   # Remove ```
+            
+            if content.endswith('```'):
+                content = content[:-3]  # Remove trailing ```
+            
+            content = content.strip()
+            print(f"Cleaned content: {content}")
+            
+            result = json_lib.loads(content)
+            mood = result.get('mood', 'neutral').lower()
+            intensity = int(result.get('intensity', 50))
+            
+            # Validate mood
+            if mood not in ['happy', 'sad', 'angry', 'neutral']:
+                mood = 'neutral'
+            
+            # Validate intensity
+            if intensity < 1:
+                intensity = 1
+            elif intensity > 100:
+                intensity = 100
+                
+            return {'mood': mood, 'intensity': intensity}
+            
+        except (json_lib.JSONDecodeError, ValueError, KeyError) as parse_e:
+            print(f"Error parsing mood response: {parse_e}")
+            print(f"Raw response: {response.content}")
+            return {'mood': 'neutral', 'intensity': 50}
+            
+    except Exception as e:
+        print(f"Error in mood detection: {e}")
+        return {'mood': 'neutral', 'intensity': 50}
+
+
 @tool
 def save_state(emotion: str, user_message: str, ai_response: str) -> str:
     """Save current state to JSON file"""
