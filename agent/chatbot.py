@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from typing_extensions import TypedDict
 from langchain_openai import ChatOpenAI
 
@@ -38,7 +38,7 @@ def chatbot(state: State):
     user_message = messages[-1].content if messages else ""
     
     # Add system prompt to the messages if it's not already there
-    if not messages or messages[0].role != "system":
+    if not messages or not isinstance(messages[0], SystemMessage):
         system_prompt = """You are Aaron, a 20-year-old, 2nd-year Computer Science student at the University of Waterloo.
 You will role-play him consistently, using only first-person speech.
 
@@ -79,7 +79,7 @@ UNLOCK MECHANICS:
 
 Remember to stay in character as Aaron and never ask questions - only make first-person statements."""
         
-        system_message = {"role": "system", "content": system_prompt}
+        system_message = SystemMessage(content=system_prompt)
         messages_with_system = [system_message] + messages
     else:
         messages_with_system = messages
@@ -134,7 +134,7 @@ config = {"configurable": {"thread_id": "1"}}
 def stream_graph_updates(user_input: str):
     """Stream updates from the graph"""
     for event in graph.stream(
-        {"messages": [{"role": "user", "content": user_input}]}, 
+        {"messages": [HumanMessage(content=user_input)]}, 
         config=config):
 
         for value in event.values():
@@ -145,7 +145,7 @@ def stream_chatbot_response(user_input: str):
     """Stream response from the chatbot"""
     try:
         for event in graph.stream(
-            {"messages": [{"role": "user", "content": user_input}]}, 
+            {"messages": [HumanMessage(content=user_input)]}, 
             config=config):
             
             for value in event.values():

@@ -117,9 +117,9 @@ def stream_ai_response(transcript):
         # Buffer for building complete sentences
         sentence_buffer = ""
 
-        from agent.chatbot import graph, config
+        from agent.chatbot import graph, config, HumanMessage
         for event in graph.stream(
-            {"messages": [{"role": "user", "content": transcript}]}, 
+            {"messages": [HumanMessage(content=transcript)]}, 
             config=config):
             
             for value in event.values():
@@ -191,9 +191,9 @@ def voice_chat():
         # Step 2: Use LangGraph agent directly
         logger.info("Sending transcript to LangGraph agent...")
         try:
-            from agent.chatbot import graph, config
+            from agent.chatbot import graph, config, HumanMessage
             result = graph.invoke(
-                {"messages": [{"role": "user", "content": transcript}]}, 
+                {"messages": [HumanMessage(content=transcript)]}, 
                 config=config
             )
             ai_response = result["messages"][-1].content
@@ -300,9 +300,9 @@ def test_memory_persistence():
         start_time = time.time()
         
         try:
-            from agent.chatbot import graph, config
+            from agent.chatbot import graph, config, HumanMessage
             result = graph.invoke(
-                {"messages": [{"role": "user", "content": user_message}]}, 
+                {"messages": [HumanMessage(content=user_message)]}, 
                 config=config
             )
             ai_response = result["messages"][-1].content
@@ -319,9 +319,9 @@ def test_memory_persistence():
         logger.info("Step 2: Testing streaming response...")
         stream_chunks = []
         try:
-            from agent.chatbot import graph, config
+            from agent.chatbot import graph, config, HumanMessage
             for event in graph.stream(
-                {"messages": [{"role": "user", "content": user_message}]}, 
+                {"messages": [HumanMessage(content=user_message)]}, 
                 config=config):
                 
                 for value in event.values():

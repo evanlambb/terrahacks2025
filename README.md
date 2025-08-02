@@ -1,65 +1,132 @@
-# Terrahacks 2025 - LangGraph Chatbot
+# TerraHacks 2025 - AI Voice Chat with Memory
 
-A conversational AI chatbot built with LangGraph, featuring tool integration for enhanced capabilities.
+A Flask-based voice chat application with AI memory persistence using LangGraph and Whisper.
 
 ## Features
 
-- Interactive chatbot with memory
-- Weather information tool
-- Extensible tool system
-- Conversation state management
+- 🎤 **Voice Chat**: Real-time audio transcription using OpenAI Whisper
+- 🧠 **Memory Persistence**: Conversation context maintained across sessions using LangGraph
+- 📡 **Streaming Responses**: Real-time AI response streaming
+- 🎭 **Character AI**: Role-playing as Aaron, a CS student persona
+- 🔧 **RESTful API**: Easy integration with Unity or other clients
 
-## Setup
+## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd terrahacks2025
-   ```
+### 1. Install Dependencies
 
-2. **Create and activate virtual environment**
-   ```bash
-   python -m venv venv
-   # On Windows:
-   venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Set up Environment Variables
 
-4. **Set up environment variables**
-   Create a `.env` file in the root directory:
-   ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   ```
+Create a `.env` file in the root directory:
 
-5. **Run the chatbot**
-   ```bash
-   python agent/chatbot.py
-   ```
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+```
 
-## Usage
+### 3. Start the Server
 
-- Type your messages and press Enter
-- Type `quit`, `exit`, or `q` to exit
-- The chatbot can provide weather information for cities
+```bash
+python server/whisper_server.py
+```
+
+The server will start on `http://localhost:5000`
+
+### 4. Test the Application
+
+#### Quick Memory Test
+```bash
+python test_memory.py --simple
+```
+
+#### Full Comprehensive Test
+```bash
+python test_memory.py
+```
+
+## API Endpoints
+
+### Health Check
+- **GET** `/health` - Check server status
+
+### Voice Chat
+- **POST** `/voice-chat` - Send audio file, get transcript + AI response
+- **POST** `/voice-chat-stream` - Send audio file, get streaming response
+
+### Memory Testing
+- **POST** `/test-memory` - Test memory persistence with text input
+- **POST** `/test-memory-reset` - Test memory reset functionality
+
+### Session Management
+- **GET** `/session/<session_id>/history` - Get conversation history
+
+## Testing Results
+
+✅ **Memory Persistence**: Working perfectly - agent remembers conversation context
+✅ **Text-based Chat**: Fully functional with LangGraph integration
+✅ **Character AI**: Aaron persona working correctly
+⚠️ **Audio Transcription**: Requires real speech (dummy audio not detected)
+
+## Current Status
+
+### Working Features
+- ✅ Memory persistence across conversation turns
+- ✅ Text-based chat with character AI
+- ✅ Streaming responses
+- ✅ Health endpoint
+- ✅ Comprehensive testing framework
+
+### Known Issues
+- ⚠️ Audio transcription fails with dummy/synthetic audio files
+- ⚠️ Requires real speech recordings for voice chat testing
+
+### For Real Audio Testing
+1. Install gTTS: `pip install gTTS`
+2. Or use actual speech recordings
+3. Voice chat endpoints will work with real speech
 
 ## Project Structure
 
 ```
 terrahacks2025/
 ├── agent/
-│   ├── chatbot.py          # Main chatbot implementation
-│   └── chatbot_tools.py    # Tool definitions
+│   ├── chatbot.py          # LangGraph agent implementation
+│   └── chatbot_tools.py    # Tools for weather, mood detection, state saving
+├── server/
+│   └── whisper_server.py   # Flask server with Whisper integration
+├── test_memory.py          # Comprehensive testing framework
 ├── requirements.txt        # Python dependencies
-├── .env                   # Environment variables (create this)
-└── README.md             # This file
+└── README.md              # This file
 ```
 
-## Adding New Tools
+## Development
 
-To add new tools, edit `agent/chatbot_tools.py` and add new functions with the `@tool` decorator.
+### Adding New Features
+1. Extend the LangGraph agent in `agent/chatbot.py`
+2. Add new tools in `agent/chatbot_tools.py`
+3. Create new endpoints in `server/whisper_server.py`
+4. Update tests in `test_memory.py`
+
+### Memory System
+The application uses LangGraph's checkpoint memory system to maintain conversation context. Each conversation turn is saved and retrieved automatically.
+
+### Character AI
+The AI plays the role of Aaron, a 20-year-old CS student with specific personality traits and conversation patterns.
+
+## Troubleshooting
+
+### Common Issues
+1. **"No speech detected in audio"** - Use real speech recordings, not dummy audio
+2. **Memory not persisting** - Check that the server is running and LangGraph is properly configured
+3. **API key errors** - Ensure your `.env` file contains a valid OpenAI API key
+
+### Testing
+- Use `python test_memory.py --simple` for quick memory verification
+- Use `python test_memory.py` for comprehensive testing
+- Check server logs for detailed error information
+
+## License
+
+This project is part of TerraHacks 2025.
