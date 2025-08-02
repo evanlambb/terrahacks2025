@@ -1,0 +1,4 @@
+# Copy this content to a new file called ".env" (without quotes)
+
+RESEND_API_KEY=re_your_api_key_here
+MY_EMAIL=your.email@gmail.com

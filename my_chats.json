@@ -1,0 +1,14 @@
+[
+  {
+    "user": "Hello there!",
+    "system": "Hi! How can I help you?"
+  },
+  {
+    "user": "What's the weather like?",
+    "system": "It's sunny and 75°F today."
+  },
+  {
+    "user": "Thanks!",
+    "system": ""
+  }
+]

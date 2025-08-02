@@ -19,3 +19,7 @@ librosa>=0.10.0
 # Testing dependencies
 requests>=2.25.0
 gtts>=2.3.0 
+yagmail
+pytest>=7.0.0
+pytest-mock>=3.10.0
+responses>=0.22.0
