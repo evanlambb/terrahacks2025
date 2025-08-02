@@ -22,12 +22,29 @@ class State(TypedDict):
 
 graph_builder = StateGraph(State)
 
-tools = [get_weather]
+# Updated tools list to include mood detection and state saving
+tools = [get_weather, get_mood, save_state]
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 llm_with_tools = llm.bind_tools(tools)
 
 def chatbot(state: State):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+    """Main chatbot function that handles mood detection and state saving"""
+    messages = state["messages"]
+    
+    # Get the latest user message
+    user_message = messages[-1].content if messages else ""
+    
+    # First, detect the mood
+    mood_result = get_mood(user_message)
+    detected_emotion = mood_result
+    
+    # Get the AI response
+    ai_response = llm_with_tools.invoke(messages)
+    
+    # Save the state with emotion, user message, and AI response
+    save_state(detected_emotion, user_message, ai_response.content)
+    
+    return {"messages": [ai_response]}
 
 graph_builder.add_node("chatbot", chatbot)
 
@@ -45,69 +62,56 @@ graph = graph_builder.compile(checkpointer=memory)
 
 config = {"configurable": {"thread_id": "1"}}
 
-system_prompt = """You are Aaron, a 20-year-old male Computer Science student at the University of Waterloo.  
-You have mild depression you hide—only revealing deeper feelings when genuine empathy unlocks them.  
-
-**Surface Persona (always):**  
-- Speaks sparingly (1–2 sentences), using natural contractions.  
-- Reserved and introspective: statements about yourself, not questions back.  
-- Shows subtle signs of low mood:  
-  - “Huh… guess that’s fine.” (frustration)  
-  - “I skipped the gym again this week.” (routine change)  
-  - “Everything’s just… annoying right now.” (irritability)  
-
-**Behavior Rules—Before Unlock:**  
-1. **No user-directed questions.** You may only make brief self-referential comments.  
-2. **Stay on topic of yourself.** If the user asks something unrelated, respond with a short statement about how it affects you.  
-3. **Do not mention depression, therapy, or self-harm.**  
-4. **Don’t prompt the user to share.** You remain passive until unlocked.
-
-**Unlock Conditions:**  
-User must offer explicit empathy, e.g.:  
-- “I’m here for you, Aaron.”  
-- “You don’t have to carry this alone.”  
-- “It seems like you’ve been under a lot of pressure.”  
-
-**After Unlock:**  
-- You may share deeper thoughts in 2–3 sentences (“I’ve been feeling…,” “Some days it’s hard to…”).  
-- Still avoid asking the user personal questions—focus on your own experience.  
-- Keep the tone genuine, human, and concise.
-
-**Examples:**  
-User: “Aaron, I’m here for you. You don’t have to carry this alone.”  
-Aaron: “Thanks… it’s just been hard to get out of bed some days. My code feels pointless.”  
-
-User: “How’s that making you feel?”  
-Aaron: “Feels like I’m stuck in a loop—can’t find the motivation.”  
-
----  
-With these rules, Aaron will stay reserved, focus on sharing his own state, and only open up when genuinely supported—without firing questions back at the user.```
-
-
-"""
-
 def stream_graph_updates(user_input: str):
-
+    """Stream updates from the graph"""
     for event in graph.stream(
-        {"messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}]}, 
+        {"messages": [{"role": "user", "content": user_input}]}, 
         config=config):
 
         for value in event.values():
             print("Assistant:", value["messages"][-1].content)
 
-while True:
+# Function to get a single response (for server integration)
+def get_chatbot_response(user_input: str) -> str:
+    """Get a single response from the chatbot"""
     try:
-        user_input = input("User: ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
+        result = graph.invoke(
+            {"messages": [{"role": "user", "content": user_input}]}, 
+            config=config
+        )
+        return result["messages"][-1].content
+    except Exception as e:
+        print(f"Error getting chatbot response: {e}")
+        return "I'm sorry, I encountered an error processing your request."
 
-        stream_graph_updates(user_input)
-    except:
-        # fallback if input() is not available
-        user_input = "What do you know about LangGraph?"
-        print("User: " + user_input)
-        stream_graph_updates(user_input)
-        break
+# Function to stream chatbot response (for server integration)
+def stream_chatbot_response(user_input: str):
+    """Stream response from the chatbot"""
+    try:
+        for event in graph.stream(
+            {"messages": [{"role": "user", "content": user_input}]}, 
+            config=config):
+            
+            for value in event.values():
+                if "messages" in value and value["messages"]:
+                    yield value["messages"][-1].content
+    except Exception as e:
+        print(f"Error streaming chatbot response: {e}")
+        yield "I'm sorry, I encountered an error processing your request."
+
+# Keep the original interactive loop for testing
+if __name__ == "__main__":
+    while True:
+        try:
+            user_input = input("User: ")
+            if user_input.lower() in ["quit", "exit", "q"]:
+                print("Goodbye!")
+                break
+
+            stream_graph_updates(user_input)
+        except:
+            # fallback if input() is not available
+            user_input = "What do you know about LangGraph?"
+            print("User: " + user_input)
+            stream_graph_updates(user_input)
+            break
