@@ -83,13 +83,15 @@ def detect_mood_and_generate_response(transcript):
 
 Based on your character as Aaron and the conversation history (if any), respond naturally as Aaron would. Also analyze the intended mood/emotion from the user's message (choose from: happy, sad, angry), kind messages should have a happy mood, while critical or negative messages should have a sad or angry mood.
 Include what stage in the conversation you are at (1, 2, 3, or 4). The previous stage was {stage}, if the previous message was suitable for the criteria then move to the next stage and respond according to the next stage. Only move to the next stage if the criteria in the system prompt has been met.
+Also include whether the conversations is over or not, ie both parties have said goodbye and stage 4 has been reached.
 
 Please respond in this exact JSON format:
 {{
     "mood": "detected_mood",
     "intensity": intensity_score_0_to_100,
     "response": "Aaron's natural response as defined in the system prompt",
-    "stage": current_stage_number
+    "stage": current_stage_number,
+    "conversation_over": true or false
 }}
 """
         
@@ -287,7 +289,7 @@ def voice_chat_stream():
                 yield f"data: {json.dumps({'type': 'text', 'content': gemini_result['response']})}\n\n"
                 stage = max(gemini_result['stage'], stage)
                 yield f"data: {json.dumps({'type': 'stage', 'content': str(stage)})}\n\n"
-
+                yield f"data: {json.dumps({'type': 'conversation_over', 'content': str(gemini_result['conversation_over'])})}\n\n"
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
                 
             except Exception as stream_error:
