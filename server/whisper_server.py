@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from agent.chatbot import get_chatbot_response, stream_chatbot_response
+from agent.chatbot import stream_chatbot_response
 
 # Load environment variables
 load_dotenv()
