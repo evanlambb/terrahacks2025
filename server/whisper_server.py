@@ -117,15 +117,22 @@ def stream_ai_response(transcript):
         # Buffer for building complete sentences
         sentence_buffer = ""
 
-        for chunk in stream_chatbot_response(transcript):
-            if chunk:
-                sentence_buffer += chunk
+        from agent.chatbot import graph, config
+        for event in graph.stream(
+            {"messages": [{"role": "user", "content": transcript}]}, 
+            config=config):
+            
+            for value in event.values():
+                if "messages" in value and value["messages"]:
+                    chunk = value["messages"][-1].content
+                    if chunk:
+                        sentence_buffer += chunk
 
-                # Check if we have a complete sentence
-                if any(punct in chunk for punct in ['.', '!', '?', '\n']):
-                    if sentence_buffer.strip():
-                        yield f"data: {json.dumps({'type': 'text', 'content': sentence_buffer.strip()})}\n\n"
-                        sentence_buffer = ""
+                        # Check if we have a complete sentence
+                        if any(punct in chunk for punct in ['.', '!', '?', '\n']):
+                            if sentence_buffer.strip():
+                                yield f"data: {json.dumps({'type': 'text', 'content': sentence_buffer.strip()})}\n\n"
+                                sentence_buffer = ""
 
         # Send any remaining content
         if sentence_buffer.strip():
@@ -181,10 +188,15 @@ def voice_chat():
 
         logger.info(f"Transcription completed: {transcript}")
 
-        # Step 2: Use LangGraph agent instead of direct OpenAI
+        # Step 2: Use LangGraph agent directly
         logger.info("Sending transcript to LangGraph agent...")
         try:
-            ai_response = get_chatbot_response(transcript)
+            from agent.chatbot import graph, config
+            result = graph.invoke(
+                {"messages": [{"role": "user", "content": transcript}]}, 
+                config=config
+            )
+            ai_response = result["messages"][-1].content
             logger.info(f"LangGraph agent response: {ai_response}")
 
         except Exception as agent_e:
@@ -288,7 +300,12 @@ def test_memory_persistence():
         start_time = time.time()
         
         try:
-            ai_response = get_chatbot_response(user_message)
+            from agent.chatbot import graph, config
+            result = graph.invoke(
+                {"messages": [{"role": "user", "content": user_message}]}, 
+                config=config
+            )
+            ai_response = result["messages"][-1].content
             response_time = time.time() - start_time
             
             logger.info(f"Step 1: LangGraph response received in {response_time:.2f}s")
@@ -302,12 +319,23 @@ def test_memory_persistence():
         logger.info("Step 2: Testing streaming response...")
         stream_chunks = []
         try:
-            for i, chunk in enumerate(stream_chatbot_response(user_message)):
-                if chunk:
-                    stream_chunks.append(chunk)
-                    logger.info(f"Step 2: Stream chunk {i+1}: {chunk[:100]}...")
-                    if i >= 2:  # Just test first few chunks
-                        break
+            from agent.chatbot import graph, config
+            for event in graph.stream(
+                {"messages": [{"role": "user", "content": user_message}]}, 
+                config=config):
+                
+                for value in event.values():
+                    if "messages" in value and value["messages"]:
+                        chunk = value["messages"][-1].content
+                        if chunk:
+                            stream_chunks.append(chunk)
+                            logger.info(f"Step 2: Stream chunk {len(stream_chunks)}: {chunk[:100]}...")
+                            if len(stream_chunks) >= 3:  # Just test first few chunks
+                                break
+                        if len(stream_chunks) >= 3:
+                            break
+                if len(stream_chunks) >= 3:
+                    break
         except Exception as stream_e:
             logger.error(f"Step 2: Streaming error: {stream_e}")
         
