@@ -1,0 +1,6 @@
+langchain-tavily
+langchain-core
+langgraph
+typing-extensions 
+langchain-openai
+python-dotenv
