@@ -25,28 +25,74 @@ logger = logging.getLogger(__name__)
 # Load Whisper model
 model = whisper.load_model("base")
 
+# Global conversation history for single user
+conversation_history = []
+
+
+def add_message(role, content):
+    """Add message to conversation history"""
+    conversation_history.append({
+        "role": role, 
+        "content": content
+    })
+    
+    # Keep only last 10 messages to prevent memory bloat
+    if len(conversation_history) > 10:
+        conversation_history.pop(0)  # Remove oldest message
+
+
+def get_conversation_context():
+    """Get conversation context for Gemini prompt"""
+    if not conversation_history:
+        return ""
+    
+    context = "Previous conversation:\n"
+    for msg in conversation_history[-6:]:  # Last 6 messages for context
+        role_name = "User" if msg["role"] == "user" else "Assistant"
+        context += f"{role_name}: {msg['content']}\n"
+    
+    return context + "\n"
+
+
+def load_system_prompt():
+    """Load the system prompt from prompt.txt"""
+    try:
+        prompt_path = os.path.join(os.path.dirname(__file__), 'prompt.txt')
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"Failed to load system prompt: {e}")
+        return "You are a helpful assistant."
+
 
 def detect_mood_and_generate_response(transcript):
-    """Detect mood from transcript and generate appropriate response"""
+    """Detect mood from transcript and generate appropriate response with conversation context"""
     try:
-        # Create prompt for mood detection and response generation
-        prompt = f"""
-        Analyze the following transcript and:
-        1. Detect the speaker's mood/emotion (choose from: happy, sad, angry, anxious, excited, neutral, frustrated, calm)
-        2. Generate a supportive and empathetic response (2-3 sentences max)
+        # Load system prompt
+        system_prompt = load_system_prompt()
+        
+        # Get conversation context
+        context = get_conversation_context()
+        
+        # Create the full prompt with system prompt, context, and current message
+        full_prompt = f"""{system_prompt}
 
-        Transcript: "{transcript}"
+{context}Current user message: "{transcript}"
 
-        Please respond in this exact JSON format:
-        {{
-            "mood": "detected_mood",
-            "intensity": intensity_score_0_to_100,
-            "response": "your supportive response here"
-        }}
-        """
+Based on your character as Aaron and the conversation history (if any), respond naturally as Aaron would. Also analyze the intended mood/emotion from the user's message (choose from: happy, sad, angry), kind messages should have a happy mood, while critical or negative messages should have a sad or angry mood.
+Include what stage in the conversation you are at (1, 2, 3, or 4).
+
+Please respond in this exact JSON format:
+{{
+    "mood": "detected_mood",
+    "intensity": intensity_score_0_to_100,
+    "response": "Aaron's natural response as defined in the system prompt",
+    "stage": current_stage_number
+}}
+"""
         
         logger.info("Calling Gemini for mood detection and response generation...")
-        response = gemini_model.generate_content(prompt)
+        response = gemini_model.generate_content(full_prompt)
         
         # Parse the JSON response
         response_text = response.text.strip()
@@ -64,7 +110,8 @@ def detect_mood_and_generate_response(transcript):
         return {
             "mood": "neutral",
             "intensity": 50,
-            "response": "I understand what you're saying. How can I help you today?"
+            "response": "Hey, I'm having some trouble processing that right now. Mind saying it again?",
+            "stage": 1
         }
 
 
@@ -167,9 +214,15 @@ def voice_chat():
         if not transcript:
             return jsonify({'error': 'No speech detected'}), 400
 
-        # Step 2: Detect mood and generate response using Gemini
-        logger.info("Detecting mood and generating response...")
+        # Step 2: Add user message to conversation history
+        add_message("user", transcript)
+
+        # Step 3: Detect mood and generate response using Gemini with context
+        logger.info("Detecting mood and generating response with conversation context...")
         gemini_result = detect_mood_and_generate_response(transcript)
+
+        # Step 4: Add AI response to conversation history
+        add_message("assistant", gemini_result['response'])
 
         return jsonify({
             'transcript': transcript,
@@ -213,9 +266,15 @@ def voice_chat_stream():
                 # Send transcript first
                 yield f"data: {json.dumps({'type': 'transcript', 'content': transcript})}\n\n"
                 
-                # Get mood and response from Gemini
-                logger.info("Getting mood detection and response from Gemini...")
+                # Add user message to conversation history
+                add_message("user", transcript)
+                
+                # Get mood and response from Gemini with conversation context
+                logger.info("Getting mood detection and response from Gemini with context...")
                 gemini_result = detect_mood_and_generate_response(transcript)
+                
+                # Add AI response to conversation history
+                add_message("assistant", gemini_result['response'])
                 
                 # Send mood data
                 yield f"data: {json.dumps({'type': 'mood', 'content': gemini_result['mood'] + ' ' + str(gemini_result['intensity'])})}\n\n"
@@ -223,7 +282,9 @@ def voice_chat_stream():
                 # Send the complete response immediately
                 logger.info("Sending AI response...")
                 yield f"data: {json.dumps({'type': 'text', 'content': gemini_result['response']})}\n\n"
-                
+
+                yield f"data: {json.dumps({'type': 'stage', 'content': str(gemini_result['stage'])})}\n\n"
+
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
                 
             except Exception as stream_error:
@@ -244,6 +305,24 @@ def voice_chat_stream():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy', 'model_loaded': model is not None})
+
+
+@app.route('/conversation', methods=['GET'])
+def get_conversation():
+    """Get current conversation history"""
+    return jsonify({
+        'conversation_history': conversation_history,
+        'message_count': len(conversation_history)
+    })
+
+
+@app.route('/conversation', methods=['DELETE'])
+def clear_conversation():
+    """Clear conversation history"""
+    global conversation_history
+    conversation_history = []
+    logger.info("Conversation history cleared")
+    return jsonify({'message': 'Conversation history cleared'})
 
 
 if __name__ == '__main__':
