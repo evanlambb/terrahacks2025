@@ -13,6 +13,9 @@ memory = InMemorySaver()
 
 from dotenv import load_dotenv
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from chatbot_tools import * 
 
 load_dotenv()
@@ -22,8 +25,8 @@ class State(TypedDict):
 
 graph_builder = StateGraph(State)
 
-# Updated tools list to include mood detection and state saving
-tools = [get_weather, get_mood, save_state]
+# Simplified tools list to avoid compatibility issues
+tools = [get_weather]
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 llm_with_tools = llm.bind_tools(tools)
 
@@ -34,15 +37,34 @@ def chatbot(state: State):
     # Get the latest user message
     user_message = messages[-1].content if messages else ""
     
-    # First, detect the mood
-    mood_result = get_mood(user_message)
-    detected_emotion = mood_result
-    
-    # Get the AI response
+    # Get the AI response first
     ai_response = llm_with_tools.invoke(messages)
     
+    # Then detect the mood and save state (without using tools directly)
+    try:
+        # Use a simple LLM call for mood detection instead of the tool
+        mood_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        mood_prompt = f"""
+        Analyze this message and return only 'happy', 'sad', or 'neutral':
+        "{user_message}"
+        
+        Return only the emotion word, nothing else.
+        """
+        mood_response = mood_llm.invoke(mood_prompt)
+        detected_emotion = mood_response.content.strip().lower()
+        
+        # Validate the response
+        if detected_emotion not in ['happy', 'sad', 'neutral']:
+            detected_emotion = 'neutral'
+    except Exception as e:
+        print(f"Error in mood detection: {e}")
+        detected_emotion = 'neutral'
+    
     # Save the state with emotion, user message, and AI response
-    save_state(detected_emotion, user_message, ai_response.content)
+    try:
+        save_state(detected_emotion, user_message, ai_response.content)
+    except Exception as e:
+        print(f"Error saving state: {e}")
     
     return {"messages": [ai_response]}
 

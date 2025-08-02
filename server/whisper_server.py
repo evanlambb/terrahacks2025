@@ -9,6 +9,9 @@ import time
 from openai import OpenAI
 from dotenv import load_dotenv
 # Import the LangGraph agent
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.chatbot import get_chatbot_response, stream_chatbot_response
 
 # Load environment variables
@@ -244,6 +247,151 @@ def voice_chat_stream():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy', 'model_loaded': model is not None})
+
+
+@app.route('/session/<session_id>/history', methods=['GET'])
+def get_session_history(session_id):
+    """Get conversation history for a session"""
+    try:
+        # This would require implementing a way to retrieve conversation history
+        # from the LangGraph memory system
+        logger.info(f"Requested history for session: {session_id}")
+        return jsonify({
+            'session_id': session_id,
+            'message': 'History retrieval not yet implemented',
+            'note': 'This would require additional implementation to access LangGraph memory'
+        })
+    except Exception as e:
+        logger.error(f"Error getting session history: {str(e)}")
+        return jsonify({'error': f'History retrieval failed: {str(e)}'}), 500
+
+
+@app.route('/test-memory', methods=['POST'])
+def test_memory_persistence():
+    """Test endpoint to verify memory persistence across multiple requests"""
+    try:
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'error': 'No message provided'}), 400
+        
+        user_message = data['message']
+        test_id = data.get('test_id', 'unknown')
+        turn_number = data.get('turn_number', 0)
+        
+        logger.info(f"=== MEMORY TEST TURN {turn_number} ===")
+        logger.info(f"Test ID: {test_id}")
+        logger.info(f"User message: {user_message}")
+        logger.info(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Step 1: Test direct LangGraph response
+        logger.info("Step 1: Calling LangGraph agent...")
+        start_time = time.time()
+        
+        try:
+            ai_response = get_chatbot_response(user_message)
+            response_time = time.time() - start_time
+            
+            logger.info(f"Step 1: LangGraph response received in {response_time:.2f}s")
+            logger.info(f"Step 1: AI Response: {ai_response}")
+            
+        except Exception as agent_e:
+            logger.error(f"Step 1: LangGraph agent error: {agent_e}")
+            return jsonify({'error': f'AI response failed: {str(agent_e)}'}), 500
+        
+        # Step 2: Test streaming response (simulate a few chunks)
+        logger.info("Step 2: Testing streaming response...")
+        stream_chunks = []
+        try:
+            for i, chunk in enumerate(stream_chatbot_response(user_message)):
+                if chunk:
+                    stream_chunks.append(chunk)
+                    logger.info(f"Step 2: Stream chunk {i+1}: {chunk[:100]}...")
+                    if i >= 2:  # Just test first few chunks
+                        break
+        except Exception as stream_e:
+            logger.error(f"Step 2: Streaming error: {stream_e}")
+        
+        # Step 3: Check if state file was created/updated
+        logger.info("Step 3: Checking state file...")
+        state_file = "server/state.json"
+        state_info = "No state file found"
+        try:
+            if os.path.exists(state_file):
+                with open(state_file, 'r') as f:
+                    state_data = json.load(f)
+                    state_info = f"State file exists with emotion: {state_data.get('current_emotion', 'unknown')}"
+                    logger.info(f"Step 3: {state_info}")
+            else:
+                logger.info("Step 3: No state file found yet")
+        except Exception as state_e:
+            logger.error(f"Step 3: Error reading state file: {state_e}")
+        
+        # Step 4: Memory verification summary
+        logger.info("Step 4: Memory verification summary...")
+        logger.info(f"  - Turn number: {turn_number}")
+        logger.info(f"  - Test ID: {test_id}")
+        logger.info(f"  - Response time: {response_time:.2f}s")
+        logger.info(f"  - Stream chunks received: {len(stream_chunks)}")
+        logger.info(f"  - State file status: {state_info}")
+        
+        # Step 5: Provide context for next turn
+        context_hint = ""
+        if turn_number == 0:
+            context_hint = "First turn - no previous context"
+        elif turn_number == 1:
+            context_hint = "Second turn - should remember first turn"
+        else:
+            context_hint = f"Turn {turn_number} - should remember all previous turns"
+        
+        logger.info(f"Step 5: Context hint: {context_hint}")
+        logger.info("=== END MEMORY TEST TURN ===\n")
+        
+        return jsonify({
+            'test_id': test_id,
+            'turn_number': turn_number,
+            'user_message': user_message,
+            'ai_response': ai_response,
+            'response_time': response_time,
+            'stream_chunks_count': len(stream_chunks),
+            'state_file_status': state_info,
+            'context_hint': context_hint,
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+    except Exception as e:
+        logger.error(f"Error during memory test: {str(e)}")
+        return jsonify({'error': f'Memory test failed: {str(e)}'}), 500
+
+
+@app.route('/test-memory-reset', methods=['POST'])
+def test_memory_reset():
+    """Test endpoint to verify memory can be reset by restarting the server"""
+    try:
+        logger.info("=== MEMORY RESET TEST ===")
+        logger.info("This endpoint simulates what happens when the server restarts")
+        logger.info("In a real scenario, you would restart the Flask server")
+        logger.info("For testing, we'll just log the current state")
+        
+        # Check current state
+        state_file = "server/state.json"
+        if os.path.exists(state_file):
+            with open(state_file, 'r') as f:
+                state_data = json.load(f)
+                logger.info(f"Current state before 'reset': {state_data}")
+        else:
+            logger.info("No state file found")
+        
+        logger.info("=== END MEMORY RESET TEST ===\n")
+        
+        return jsonify({
+            'message': 'Memory reset test completed',
+            'note': 'To actually reset memory, restart the Flask server',
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+    except Exception as e:
+        logger.error(f"Error during memory reset test: {str(e)}")
+        return jsonify({'error': f'Memory reset test failed: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
