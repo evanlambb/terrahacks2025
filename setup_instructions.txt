@@ -1,0 +1,22 @@
+QUICK EMAIL SETUP INSTRUCTIONS
+===============================
+
+1. Sign up at resend.com (30 seconds)
+2. Copy your API key from the dashboard
+3. Set environment variables:
+
+Windows (PowerShell):
+$env:RESEND_API_KEY="re_your_api_key_here"
+$env:MY_EMAIL="your.email@gmail.com"
+
+Linux/Mac:
+export RESEND_API_KEY="re_your_api_key_here"
+export MY_EMAIL="your.email@gmail.com"
+
+4. Install requests:
+pip install requests
+
+5. Run the script:
+python email_sender.py
+
+That's it! You'll receive an email in seconds.

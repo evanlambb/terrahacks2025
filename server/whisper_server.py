@@ -4,9 +4,20 @@ import whisper
 import os
 import logging
 import json
+<<<<<<< HEAD
+from datetime import datetime
+import time
+from dotenv import load_dotenv
+# Import the LangGraph agent
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from simple_email import send_email
+=======
 import tempfile
 from dotenv import load_dotenv
 import google.generativeai as genai
+>>>>>>> 8a6606e6459ff34ae885f9d3f0a1136160366983
 
 # Load environment variables
 load_dotenv()
@@ -238,6 +249,25 @@ def voice_chat():
     except Exception as e:
         logger.error(f"Voice chat error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/get-score-and-email', methods=['POST'])
+def get_score_and_email():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        chat = data.get('chat')
+
+        send_email(email, chat)
+
+        return jsonify({'status': 'success', 
+                        'message': 'Email sent successfully',
+                        'email': email,
+                        'timestamp': datetime.now().isoformat()}), 200
+
+    except Exception as e:
+        logger.error(f"Error during get score and email: {str(e)}")
+        return jsonify({'error': f'Get score and email failed: {str(e)}'}), 500
+        
 
 
 @app.route('/voice-chat-stream', methods=['POST'])
