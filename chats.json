@@ -2,11 +2,31 @@
   {
     "user": {
       "role": "user",
-      "content": "Hey Aaron, I just want you to know that you're a complete loser. You need to suck up your feelings and man up because you're not doing a good job at school and you're failing right now."
+      "content": "Hey Maya, how's it going?"
     },
     "system": {
       "role": "assistant",
-      "content": "Wow, that's really uncalled for. I don't appreciate you talking to me like that.  I'm done with this conversation."
+      "content": "Hey! It's going okay.  I'm working on a sociology essay draft right now,  it's about gender norms and it's proving to be more challenging than I thought it would be.  I'm really excited about the next journaling spread, though – I bought some new pastel pens!"
+    }
+  },
+  {
+    "user": {
+      "role": "user",
+      "content": "Well you're a freaking yeah for you."
+    },
+    "system": {
+      "role": "assistant",
+      "content": "Thanks!  It means a lot.  I've been having a bit of trouble focusing lately though – I keep getting distracted by social media.  I’m trying to improve, but I’m not doing as well as I would hope."
+    }
+  },
+  {
+    "user": {
+      "role": "user",
+      "content": "Yeah, it makes sense. I mean you kind of trash us cool knocking lie"
+    },
+    "system": {
+      "role": "assistant",
+      "content": "I'm sorry, I don't understand what you mean.  I'm not going to continue this conversation if you're going to be rude."
     }
   }
 ]

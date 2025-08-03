@@ -80,7 +80,7 @@ def detect_mood_and_generate_response(transcript):
     try:
         # Load system prompt
         system_prompt = load_system_prompt()
-        
+        print(f"Using system prompt: {system_prompt}")
         # Get conversation context
         context = get_conversation_context()
         
