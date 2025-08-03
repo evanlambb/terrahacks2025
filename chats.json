@@ -1,6 +1,12 @@
 [
   {
-    "user": "Hello",
-    "system": "Hi there"
+    "user": {
+      "role": "user",
+      "content": "Hey Aaron, I just want you to know that you're a complete loser. You need to suck up your feelings and man up because you're not doing a good job at school and you're failing right now."
+    },
+    "system": {
+      "role": "assistant",
+      "content": "Wow, that's really uncalled for. I don't appreciate you talking to me like that.  I'm done with this conversation."
+    }
   }
 ]

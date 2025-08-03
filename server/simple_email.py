@@ -84,7 +84,7 @@ if __name__ == "__main__":
 def generate_analysis(chats):
     api_key = os.getenv("GOOGLE_API_KEY")
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-pro")
 
     chats_json = convert_chats_to_json(chats, "chats.json")
 

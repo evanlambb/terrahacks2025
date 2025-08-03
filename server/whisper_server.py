@@ -4,7 +4,6 @@ import whisper
 import os
 import logging
 import json
-<<<<<<< HEAD
 from datetime import datetime
 import time
 from dotenv import load_dotenv
@@ -13,11 +12,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simple_email import send_email
-=======
 import tempfile
 from dotenv import load_dotenv
 import google.generativeai as genai
->>>>>>> 8a6606e6459ff34ae885f9d3f0a1136160366983
 
 # Load environment variables
 load_dotenv()
@@ -250,18 +247,14 @@ def voice_chat():
         logger.error(f"Voice chat error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/get-score-and-email', methods=['POST'])
+@app.route('/get-score-and-email', methods=['GET'])
 def get_score_and_email():
+    global conversation_history
     try:
-        data = request.get_json()
-        email = data.get('email')
-        chat = data.get('chat')
-
-        send_email(email, chat)
+        send_email("evanlamb848@gmail.com", conversation_history)
 
         return jsonify({'status': 'success', 
                         'message': 'Email sent successfully',
-                        'email': email,
                         'timestamp': datetime.now().isoformat()}), 200
 
     except Exception as e:
